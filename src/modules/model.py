@@ -228,4 +228,45 @@ class GeneratorFullModel(torch.nn.Module):
             value = torch.abs(eye - value).mean()
             loss_values["bg"] = self.loss_weights["bg"] * value
 
+        # ── MobilePortrait Δ3 facial-knowledge losses ──────────────────────────────
+        # Guarded by target presence so the model still runs before the dataset emits
+        # FK / masks. kp_extractor = MixedKPDetector exposes fk_kp (frozen 106-pt FK).
+        lw = self.loss_weights
+        if lw.get("kp_distance", 0) and ("fk_kp" in kp_driving):
+            fk = kp_driving["fk_kp"]
+            mk = kp_driving["fg_kp"]
+            n = min(fk.shape[1], mk.shape[1])
+            loss_values["kp"] = (
+                lw["kp_distance"] * torch.abs(mk[:, :n] - fk[:, :n]).mean()
+            )
+        if (
+            lw.get("landmark_mask", 0)
+            and ("lmk_mask" in x)
+            and ("lmk_mask_pred" in dense_motion)
+        ):
+            tgt = F.interpolate(
+                x["lmk_mask"],
+                size=dense_motion["lmk_mask_pred"].shape[2:],
+                mode="bilinear",
+                align_corners=True,
+            )
+            loss_values["landmark"] = (
+                lw["landmark_mask"]
+                * torch.abs(dense_motion["lmk_mask_pred"] - tgt).mean()
+            )
+        if (
+            lw.get("fg_mask", 0)
+            and ("fg_mask" in x)
+            and ("fg_mask_pred" in dense_motion)
+        ):
+            tgt = F.interpolate(
+                x["fg_mask"],
+                size=dense_motion["fg_mask_pred"].shape[2:],
+                mode="bilinear",
+                align_corners=True,
+            )
+            loss_values["mask"] = (
+                lw["fg_mask"] * torch.abs(dense_motion["fg_mask_pred"] - tgt).mean()
+            )
+
         return loss_values, generated
