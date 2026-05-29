@@ -20,7 +20,8 @@ from modules.fk_detector import FKDetector
 from modules.model import GeneratorFullModel
 from modules.mp_dataset import MobilePortraitDataset, precompute_multiview
 
-S = 64  # tiny for CPU speed
+S = 128  # min size the dense-motion hourglass tolerates (0.25 scale -> 32 -> 5 downs);
+# S=64 underflows InstanceNorm to 1x1. Matches test_full_model.
 
 
 class _FakeBase(torch.utils.data.Dataset):
