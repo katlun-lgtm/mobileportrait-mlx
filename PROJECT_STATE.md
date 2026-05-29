@@ -5,9 +5,10 @@ M3 Max MacBook via MLX. Architecture: MobilePortrait (CVPR 2025), built by forki
 Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architecture for Apple).
 
 **Last updated:** 2026-05-29
-**Status:** Stage A code COMPLETE — 4 deltas + Δ3 losses + warm-start loader + dataset wrapper, all
-CPU-verified (5/5 tests). Remaining = train.py wiring + real providers, then Stage B on the 3090.
-No torch blocker (an earlier "torch-2.11 backward blocker" note was a misdiagnosis — retracted).
+**Status:** Stage A code COMPLETE — 4 deltas + Δ3 losses + warm-start loader + dataset wrapper +
+trainer (src/mp_train.py), all CPU-verified (6/6 tests). Remaining = real providers
+(insightface/MODNet/LaMa) + data on the 3090, then Stage B training. No torch blocker (an earlier
+"torch-2.11 backward blocker" note was a misdiagnosis — retracted; vanilla TPS backward verified OK).
 
 ## Repo layout (canonical — set by prior session, commit 5a90359/6f67368)
 
@@ -46,16 +47,22 @@ No torch blocker (an earlier "torch-2.11 backward blocker" note was a misdiagnos
   driving fg_mask + lmk_mask (Δ3) and source pseudo_bg + source_fg_mask (Δ4b) via pluggable
   seg/bg providers (CPU stubs default; MODNet/rembg + LaMa on train box). `precompute_multiview()`
   for offline per-source Δ4a feats.
-- **5/5 Stage A tests green:** delta1, delta234, full_model, warmstart, mp_dataset.
+- **Trainer** `src/mp_train.py` (commit e2d5c13) — `build_modules` / `make_dataset` / `train_loop`,
+  `--tps-checkpoint` warm-start, `--fk-backend stub|insightface`, per-epoch TPS-format checkpoints.
+  CLI: `python src/mp_train.py --config reference-tps/config/vox-256.yaml --tps-checkpoint vox.pth.tar`.
+- **Overfit-one-pair LEARNING test** `src/tests/overfit_one_pair.py` (commit f-pending) — fixes one
+  source + affine-warped driving and trains the full stack; **PASS**: total loss 368→80 (78% drop in
+  30 steps), perceptual 347→115, warp 7.1→4.2. Proves the source→driving path actually learns, not
+  just that shapes flow. CPU ~1.5s/step.
+- **7/7 Stage A tests green:** delta1, delta234, full_model, warmstart, mp_dataset, mp_train, overfit.
 
-## Remaining in Stage A
+## Remaining in Stage A (train box only — all dev-side code is done + learning-verified)
 
-1. **train.py wiring** — extend TPS `train.py`: build `MixedKPDetector` (not KPDetector), wrap
-   dataset in `MobilePortraitDataset`, thread `multiview_feats/pseudo_bg/fg_mask` + masks through
-   the model call, and call `warm_start_from_tps` on a `--tps-checkpoint` flag.
-2. **Real providers on the train box** — FK insightface 2d106 (`MixedKPDetector(fk_backend=
-   "insightface")`), seg MODNet/rembg, inpaint LaMa (pass into `MobilePortraitDataset`).
-3. **Tiny overfit-1-identity sanity** on real frames → then Stage B (train on 3090, warm-started).
+1. **Real providers** — FK insightface 2d106 (`--fk-backend insightface`), seg MODNet/rembg,
+   inpaint LaMa. mp_train.make_dataset currently passes only `fk_detector`; add the 1-line
+   `seg_provider`/`bg_provider` plumbing when those are installed.
+2. **Data** — point `config.dataset_params.root_dir` at a real VoxCeleb/CelebvHQ frame tree.
+3. Run overfit on a real clip → then Stage B (full train on 3090, warm-started from vox.pth.tar).
 
 ## Hardware / deploy (2026-05-29)
 
