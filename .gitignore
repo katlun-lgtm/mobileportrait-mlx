@@ -1,0 +1,8 @@
+reference-tps/.git/
+__pycache__/
+*.pth
+*.tar
+*.npz
+checkpoints/
+data/
+.venv/
