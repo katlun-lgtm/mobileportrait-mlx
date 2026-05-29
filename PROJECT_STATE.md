@@ -5,9 +5,9 @@ M3 Max MacBook via MLX. Architecture: MobilePortrait (CVPR 2025), built by forki
 Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architecture for Apple).
 
 **Last updated:** 2026-05-29
-**Status:** Stage A architecture COMPLETE — all 4 deltas + full GeneratorFullModel forward+backward
-PASS on CPU (test_full_model.py: 6 losses finite, MixedKP grads flow, FK frozen). No torch blocker
-(the earlier "torch-2.11 backward blocker" note was a misdiagnosis — retracted; vanilla TPS bwd OK).
+**Status:** Stage A code COMPLETE — 4 deltas + Δ3 losses + warm-start loader + dataset wrapper, all
+CPU-verified (5/5 tests). Remaining = train.py wiring + real providers, then Stage B on the 3090.
+No torch blocker (an earlier "torch-2.11 backward blocker" note was a misdiagnosis — retracted).
 
 ## Repo layout (canonical — set by prior session, commit 5a90359/6f67368)
 
@@ -34,19 +34,28 @@ PASS on CPU (test_full_model.py: 6 losses finite, MixedKP grads flow, FK frozen)
   (2,1,64,64) train-only, residual effect mean|Δ|≈0.28, Δ4 prediction (2,3,256,256), get_encode OK,
   **backward reaches residual_flow + mv_merge**. ALL PASS on CPU.
 
+## Infra — DONE (commits 55770c1 + 8949ad2)
+
+- **Δ3 losses** wired into `model.py` GeneratorFullModel.forward (L_kp vs fk_kp + landmark/fg
+  mask L1, guarded by target presence) + `landmark_mask_from_points` rasteriser.
+- **Warm-start loader** `src/modules/warmstart.py` — `warm_start_from_tps(ckpt, kp/dm/inp)` loads
+  TPS `vox.pth.tar` into the extended modules: remaps kp `fg_encoder.*`→`nk.fg_encoder.*`, expands
+  inpainting first-conv 3→7 in-ch (copies orig 3ch, zeros extra 4), strict=False with a guard
+  (unexpected keys fatal; missing keys must all be known delta layers → catches name/shape drift).
+- **Dataset** `src/modules/mp_dataset.py` — `MobilePortraitDataset` wraps TPS FramesDataset, adds
+  driving fg_mask + lmk_mask (Δ3) and source pseudo_bg + source_fg_mask (Δ4b) via pluggable
+  seg/bg providers (CPU stubs default; MODNet/rembg + LaMa on train box). `precompute_multiview()`
+  for offline per-source Δ4a feats.
+- **5/5 Stage A tests green:** delta1, delta234, full_model, warmstart, mp_dataset.
+
 ## Remaining in Stage A
 
-1. **model.py Δ3 losses** — wire L_kp + L_landmark + L_mask into `GeneratorFullModel.forward`
-   (consume dense_motion `fg_mask_pred`/`lmk_mask_pred`; add a `landmark_mask_from_points`
-   rasteriser via `kp2gaussian`). NOTE: with `MixedKPDetector` as kp_extractor, Δ1 needs NO
-   forward change — mixed kp already arrive as `fg_kp`. (Deferred this session: tool-output
-   channel was corrupting; do NOT edit model.py blind — re-read it first next session.)
-2. **Wire InpaintingNetwork Δ4 kwargs** through the model/config constructor calls + dataset
-   (driving fg mask via MODNet/rembg, landmark mask, pseudo-BG via LaMa, precomputed multiview).
-3. **FK detector** real backend (insightface 2d106) on the training box; CPU stub is placeholder.
-4. **Warm-start loader** — load TPS `vox.pth.tar` into kp_extractor/dense_motion/inpainting
-   (delta layers init fresh). Stage-B head start.
-5. Tiny overfit-1-identity sanity (needs 2+3).
+1. **train.py wiring** — extend TPS `train.py`: build `MixedKPDetector` (not KPDetector), wrap
+   dataset in `MobilePortraitDataset`, thread `multiview_feats/pseudo_bg/fg_mask` + masks through
+   the model call, and call `warm_start_from_tps` on a `--tps-checkpoint` flag.
+2. **Real providers on the train box** — FK insightface 2d106 (`MixedKPDetector(fk_backend=
+   "insightface")`), seg MODNet/rembg, inpaint LaMa (pass into `MobilePortraitDataset`).
+3. **Tiny overfit-1-identity sanity** on real frames → then Stage B (train on 3090, warm-started).
 
 ## Hardware / deploy (2026-05-29)
 
