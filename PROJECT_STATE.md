@@ -5,8 +5,9 @@ M3 Max MacBook via MLX. Architecture: MobilePortrait (CVPR 2025), built by forki
 Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architecture for Apple).
 
 **Last updated:** 2026-05-29
-**Status:** Stage A — Δ1–Δ4 (incl model.py Δ3 losses) DONE + module-verified (commit 0265124).
-Full-model backward blocked by a torch-2.11/TPS in-place incompat (reproduces in pristine TPS).
+**Status:** Stage A architecture COMPLETE — all 4 deltas + full GeneratorFullModel forward+backward
+PASS on CPU (test_full_model.py: 6 losses finite, MixedKP grads flow, FK frozen). No torch blocker
+(the earlier "torch-2.11 backward blocker" note was a misdiagnosis — retracted; vanilla TPS bwd OK).
 
 ## Repo layout (canonical — set by prior session, commit 5a90359/6f67368)
 
