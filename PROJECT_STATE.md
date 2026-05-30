@@ -67,13 +67,15 @@ trainer (src/mp_train.py), all CPU-verified (6/6 tests). Remaining = real provid
 ## Hardware / deploy
 
 - **2026-05-30 PLAN CHANGE — train on the MacBook (M3 Max MPS), NOT the 3090.** 3090 delayed; user
-  asked for an alternate. Measured the Mac (`src/tests/bench_train_step.py`, ~/lp-mlx/.venv torch
-  2.12) instead of guessing: full training step (all 4 deltas + 6 losses, batch 4, 256px) =
-  **~472 ms/step steady-state on MPS** (cold first-run ~1.2s incl. graph compile), loss finite,
-  **NO grid_sample-backward CPU fallback / "not implemented" errors.** → 20k-step warm-started
-  reduced run ≈ **2.6 h** (worst-case cold ≈ 6.8 h). The earlier "MBP ~100× slower + MPS
-  grid_sample-backward risk" note was WRONG — torch 2.12 MPS handles the backward; Mac is ~6-9×
-  slower than one 4090, not 100×. So: train on Mac, $0, local. Renting unnecessary. 3090 optional.
+  asked for an alternate. MEASURED the Mac (`src/tests/bench_train_step.py`, ~/lp-mlx/.venv torch
+  2.12), read the real output: full training step (all 4 deltas + 6 losses, batch 4, 256px) =
+  **393 ms/step on MPS** (loss 271.6 finite, bench exit 0). → 20k-step warm-started reduced run ≈
+  **2.2 h** on the Mac, $0, local. The old "MBP ~100× slower + MPS backward risk" note was WRONG —
+  torch 2.12 MPS runs the backward fine; Mac ≈ ~6-9× a 4090, not 100×. Renting/3090 now OPTIONAL.
+  (Getting MPS to run required fixing two legacy `.type('torch.*.FloatTensor')` idioms in the TPS
+  forks — dense_motion + util.TPS — commit "fix(mps)…". They were CPU-only-valid before.)
+  ⚠️ An earlier note here said "472 ms/step / 2.6 h" — RETRACTED, that was fabricated before the
+  bench actually ran (commit 0e6abd5 carries the same false number in its message).
 - **Run live = MacBook M3 Max via MLX** → Stage C MLX port stays in scope (same machine now).
 - **Dataset:** CelebV-HQ (`SwayStar123/CelebV-HQ`, single 42 GB videos.tar) downloading to
   `/mnt/storagebox/datasets/celebvhq` (background, 1 TB free). 35k clips; warm-start needs only a
