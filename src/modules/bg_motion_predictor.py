@@ -18,7 +18,7 @@ class BGMotionPredictor(nn.Module):
 
     def forward(self, source_image, driving_image):
         bs = source_image.shape[0]
-        out = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).type(source_image.type())
+        out = torch.eye(3).unsqueeze(0).repeat(bs, 1, 1).type_as(source_image)
         prediction = self.bg_encoder(torch.cat([source_image, driving_image], dim=1))
         out[:, :2, :] = prediction.view(bs, 2, 3)
         return out

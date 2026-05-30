@@ -106,7 +106,7 @@ class DenseMotionNetwork(nn.Module):
 
         zeros = (
             torch.zeros(heatmap.shape[0], 1, spatial_size[0], spatial_size[1])
-            .type(heatmap.type())
+            .type_as(heatmap)
             .to(heatmap.device)
         )
         heatmap = torch.cat([zeros, heatmap], dim=1)
@@ -157,7 +157,7 @@ class DenseMotionNetwork(nn.Module):
         Dropout for TPS transformations. Eq(7) and Eq(8) in the paper.
         """
         drop = (
-            (torch.rand(X.shape[0], X.shape[1]) < (1 - P)).type(X.type()).to(X.device)
+            (torch.rand(X.shape[0], X.shape[1]) < (1 - P)).type_as(X).to(X.device)
         )
         drop[..., 0] = 1
         drop = drop.repeat(X.shape[2], X.shape[3], 1, 1).permute(2, 3, 0, 1)

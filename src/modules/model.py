@@ -224,7 +224,7 @@ class GeneratorFullModel(torch.nn.Module):
         ):
             bg_param_reverse = self.bg_predictor(x["driving"], x["source"])
             value = torch.matmul(bg_param, bg_param_reverse)
-            eye = torch.eye(3).view(1, 1, 3, 3).type(value.type())
+            eye = torch.eye(3).view(1, 1, 3, 3).type_as(value)
             value = torch.abs(eye - value).mean()
             loss_values["bg"] = self.loss_weights["bg"] * value
 
