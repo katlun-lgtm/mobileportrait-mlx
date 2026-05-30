@@ -72,6 +72,14 @@ def to_device(batch, device):
 def make_dataset(config, fk_detector=None, seg_provider=None, bg_provider=None):
     """Build TPS FramesDataset (train) wrapped in MobilePortraitDataset. Imported lazily so a
     CPU smoke test can inject a fake base instead of needing the real video tree."""
+    import os as _os
+    import sys as _sys
+
+    _tps = _os.path.join(
+        _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "reference-tps"
+    )
+    if _tps not in _sys.path:
+        _sys.path.insert(0, _tps)
     from frames_dataset import FramesDataset, DatasetRepeater  # noqa: needs reference-tps on path
 
     base = FramesDataset(is_train=True, **config["dataset_params"])
@@ -97,6 +105,8 @@ def train_loop(
     log_dir="log/mp",
     max_steps=None,
     save_every_epoch=True,
+    log_every=20,
+    ckpt_every_steps=500,
 ):
     tp = config["train_params"]
     params = list(inp.parameters()) + list(dense.parameters()) + list(kp.parameters())
@@ -139,10 +149,22 @@ def train_loop(
                 opt_bg.step()
                 opt_bg.zero_grad()
             step += 1
-            if step % 50 == 0:
+            if step % log_every == 0 or step == 1:
                 print(
                     f"epoch {epoch} step {step} loss {float(loss):.3f} "
-                    + " ".join(f"{k}={float(v.mean()):.2f}" for k, v in losses.items())
+                    + " ".join(f"{k}={float(v.mean()):.2f}" for k, v in losses.items()),
+                    flush=True,
+                )
+            if ckpt_every_steps and step % ckpt_every_steps == 0:
+                torch.save(
+                    {
+                        "kp_detector": kp.state_dict(),
+                        "dense_motion_network": dense.state_dict(),
+                        "inpainting_network": inp.state_dict(),
+                        **({"bg_predictor": bg.state_dict()} if bg is not None else {}),
+                        "step": step,
+                    },
+                    os.path.join(log_dir, f"mp-step{step:06d}.pth.tar"),
                 )
             if max_steps is not None and step >= max_steps:
                 return model
@@ -167,8 +189,20 @@ def main():
         "--tps-checkpoint", default=None, help="TPS vox.pth.tar to warm-start from"
     )
     ap.add_argument("--fk-backend", default="stub", choices=["stub", "insightface"])
+    ap.add_argument(
+        "--providers",
+        default="stub",
+        choices=["stub", "real"],
+        help="real = rembg fg-seg + LaMa pseudo-BG (training box); stub = cheap CPU",
+    )
     ap.add_argument("--log-dir", default="log/mp")
     ap.add_argument("--device", default="cuda" if torch.cuda.is_available() else "cpu")
+    ap.add_argument(
+        "--max-steps",
+        type=int,
+        default=None,
+        help="stop after N optimizer steps (smoke tests)",
+    )
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -189,9 +223,24 @@ def main():
         )
 
     fk = FKDetector(backend=args.fk_backend)  # for the dataset's driving landmark mask
-    dataset = make_dataset(config, fk_detector=fk)
+    seg_provider, bg_provider = (None, None)
+    if args.providers == "real":
+        from modules.providers import build_providers
+
+        seg_provider, bg_provider = build_providers("real")
+    dataset = make_dataset(
+        config, fk_detector=fk, seg_provider=seg_provider, bg_provider=bg_provider
+    )
     train_loop(
-        config, kp, dense, inp, bg, dataset, device=args.device, log_dir=args.log_dir
+        config,
+        kp,
+        dense,
+        inp,
+        bg,
+        dataset,
+        device=args.device,
+        log_dir=args.log_dir,
+        max_steps=args.max_steps,
     )
 
 
