@@ -64,11 +64,20 @@ trainer (src/mp_train.py), all CPU-verified (6/6 tests). Remaining = real provid
 2. **Data** — point `config.dataset_params.root_dir` at a real VoxCeleb/CelebvHQ frame tree.
 3. Run overfit on a real clip → then Stage B (full train on 3090, warm-started from vox.pth.tar).
 
-## Hardware / deploy (2026-05-29)
+## Hardware / deploy
 
-- **Train = single local RTX 3090** (user buying). Warm-start + reduced run @256px, ~days.
-  NOT cloud 8×A100, NOT MBP (MBP ~100× slower + MPS grid_sample-backward risk).
-- **Run live = MacBook M3 Max via MLX** → Stage C MLX port stays in scope.
+- **2026-05-30 PLAN CHANGE — train on the MacBook (M3 Max MPS), NOT the 3090.** 3090 delayed; user
+  asked for an alternate. Measured the Mac (`src/tests/bench_train_step.py`, ~/lp-mlx/.venv torch
+  2.12) instead of guessing: full training step (all 4 deltas + 6 losses, batch 4, 256px) =
+  **~472 ms/step steady-state on MPS** (cold first-run ~1.2s incl. graph compile), loss finite,
+  **NO grid_sample-backward CPU fallback / "not implemented" errors.** → 20k-step warm-started
+  reduced run ≈ **2.6 h** (worst-case cold ≈ 6.8 h). The earlier "MBP ~100× slower + MPS
+  grid_sample-backward risk" note was WRONG — torch 2.12 MPS handles the backward; Mac is ~6-9×
+  slower than one 4090, not 100×. So: train on Mac, $0, local. Renting unnecessary. 3090 optional.
+- **Run live = MacBook M3 Max via MLX** → Stage C MLX port stays in scope (same machine now).
+- **Dataset:** CelebV-HQ (`SwayStar123/CelebV-HQ`, single 42 GB videos.tar) downloading to
+  `/mnt/storagebox/datasets/celebvhq` (background, 1 TB free). 35k clips; warm-start needs only a
+  subset.
 - Dev box is CPU-only → Stage A is code + shape/grad tests only. Uses `.venv` (torch 2.11 +
   torchvision 0.26).
 - **Path A email to ByteDance author already SENT 2026-05-28 20:01 EDT** — do NOT resend.
