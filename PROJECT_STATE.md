@@ -7,21 +7,23 @@ Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architectur
 
 **Last updated:** 2026-05-30
 
-## Status — training works and LEARNS on the Mac, but is ~55 s/step (too slow as-is)
+## Status — training works and LEARNS on the Mac; rate ~11-12 s/step on MPS+fallback (slow)
 
-Measured 32-step stub run, READ from `log/stubtimed` (`--providers stub --fk-backend stub
---device mps`, workers=0, PYTORCH_ENABLE_MPS_FALLBACK=1): **rc=0, 0 tracebacks, 1779 s / 32 steps
-= ~55 s/step** (process at ~89% CPU = working, not hung).
-- **It learns:** step1 loss 237.161 (percep 232.32) → step20 168.508 (percep 164.06), ~29% drop.
-- **But ~55 s/step ⇒ a 60-epoch / ~4800-step run = DAYS, not hours.** This is with STUB providers,
-  so the cost is NOT data-loading — it's the **core train step on MPS+CPU-fallback** (grid_sample
-  backward and likely other ops fall back to CPU). The earlier 765 ms "bench" mismeasured this
-  (synthetic, fewer real ops on the fallback path). Stub losses have only 3 terms (kp/landmark/mask
-  need real FK + masks).
+Stub run (`log/stubtimed`, `--providers stub --fk-backend stub --device mps`, workers=0,
+PYTORCH_ENABLE_MPS_FALLBACK=1). Numbers READ from the log (I killed it after step 20, so exact
+final ELAPSED/rc were NOT captured — do not quote them):
+- **It learns:** step1 loss 237.161 (percep 232.32, warp 4.37) → step20 161.150 (percep 157.86,
+  warp 2.75) — ~32% drop in 20 steps. Optimizer is updating; pipeline is correct.
+- **Rate ~11-12 s/step** (DERIVED: reached step 20 at ~5 min wall; step 1 prints after ~75-90 s
+  startup ⇒ ~210-225 s for 19 steps). Process ran at ~99% on one core = working, not hung.
+- This is with STUB providers, so the cost is the **core train step on MPS+CPU-fallback**
+  (grid_sample backward + other ops fall to CPU), not data-loading. The earlier 765 ms synthetic
+  "bench" undercounted the real fallback cost. Stub losses have only 3 terms (kp/landmark/mask need
+  real FK + masks).
 
-⇒ The Mac MPS+fallback path is ~70× slower than its own bench and impractical for a full run as
-configured. DECISION NEEDED (see NEXT): rent a CUDA GPU, train pure-CPU on Mac (slow but free),
-shrink the run drastically, or reduce the fallback surface. No full run launched.
+⇒ At ~11-12 s/step a 60-epoch / ~4800-step run ≈ ~15 h (and real providers would add the separate
+data-loading cost on top). Borderline; a decision on the training path is still wanted (see NEXT).
+No full run is currently running (timed run killed; no checkpoint written).
 
 ### Four real blockers fixed today (each from an actual traceback, not guessed)
 1. `ModuleNotFoundError: sklearn` (TPS frames_dataset imports it) → `pip install scikit-learn` 1.8.0.
