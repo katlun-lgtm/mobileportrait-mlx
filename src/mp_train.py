@@ -80,7 +80,21 @@ def make_dataset(config, fk_detector=None, seg_provider=None, bg_provider=None):
     )
     if _tps not in _sys.path:
         _sys.path.insert(0, _tps)
-    from frames_dataset import FramesDataset, DatasetRepeater  # noqa: needs reference-tps on path
+    import frames_dataset as _fd  # noqa: E402  (reference-tps on path above)
+    from frames_dataset import FramesDataset, DatasetRepeater  # noqa: E402
+
+    # TPS read_video() calls imageio.mimread(name) with no memtest override; CelebV-HQ clips
+    # (e.g. 1032x1032 x90 frames > 256MB) trip imageio's default memory guard. Wrap the
+    # module-level mimread to pass memtest=False without editing pristine reference-tps/.
+    if not getattr(_fd.mimread, "_mp_nomemtest", False):
+        _orig_mimread = _fd.mimread
+
+        def _mimread_nomemtest(uri, *a, **k):
+            k.setdefault("memtest", False)
+            return _orig_mimread(uri, *a, **k)
+
+        _mimread_nomemtest._mp_nomemtest = True
+        _fd.mimread = _mimread_nomemtest
 
     base = FramesDataset(is_train=True, **config["dataset_params"])
     base = MobilePortraitDataset(
@@ -123,8 +137,12 @@ def train_loop(
         )
 
     model = GeneratorFullModel(kp, bg, dense, inp, tp)
-    if device != "cpu" and torch.cuda.is_available():
-        model = model.cuda()
+    # Move the whole model (incl. ImagePyramide / AntiAliasInterpolation2d registered buffers,
+    # Vgg19) to the compute device. Must use `device` directly — gating on torch.cuda only left
+    # these buffers on CPU under MPS, causing "Input type (MPSFloatType) and weight type
+    # (torch.FloatTensor) should be the same".
+    if device != "cpu":
+        model = model.to(device)
 
     loader = DataLoader(
         dataset,
