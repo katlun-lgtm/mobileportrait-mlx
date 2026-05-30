@@ -7,6 +7,25 @@ Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architectur
 
 **Last updated:** 2026-05-30
 
+## ⭐ PIVOT (2026-05-30): full MLX port for real GPU training (user-chosen)
+PyTorch MPS is a dead end for THIS architecture — `grid_sampler_2d_backward` is unimplemented
+(issue #97606 open), so warping-model training falls back to CPU and the M3 Max GPU sits idle
+(measured: MPS+fallback ~11-12 s/step ≈ pure-CPU ~16-17 s/step; GPU ~idle). Deep research
+(docs/APPLE_SILICON_RESEARCH.json, 108 agents, 22 claims confirmed) → **MLX is the only path to
+real GPU compute** for fwd+bwd warping; CoreML/ANE is inference-only & fragile.
+**FOUNDATION DONE (commit 04ca9f0):** `src/mlx/grid_sample_mlx.py` — differentiable grid_sample
+(custom Metal fwd + d_x atomic-scatter + d_grid kernels via mx.custom_function/.vjp), VALIDATED
+vs torch.nn.functional.grid_sample on Mac (mlx 0.31.2): WORST 7.63e-06 across all 4
+align_corners×padding_mode combos (READ from /tmp/gstest.log, rc=0). Reuses the forward-kernel
+approach from ~/lp-mlx/kernels/mlx_grid_sample.py (which had NO backward).
+**NEXT (multi-week):** port MobilePortrait modules to MLX on top of this — keypoint detectors,
+dense_motion (TPS transform + hourglass), inpainting U-Net, the 4 deltas, losses (Vgg perceptual),
+training loop; convert vox.pth.tar weights pth→mlx for warm-start. Build module-by-module, each
+validated vs the PyTorch reference, like grid_sample was. The PyTorch stack (src/modules/) stays as
+the numerical reference to check each MLX module against.
+⚠️ The Mac PyTorch training path below (stub run / frames-config / providers) is SUPERSEDED by the
+MLX port for training, but its numbers are real and the dataset/providers work is reusable.
+
 ## Status — training works and LEARNS on the Mac; rate ~11-12 s/step on MPS+fallback (slow)
 
 Stub run (`log/stubtimed`, `--providers stub --fk-backend stub --device mps`, workers=0,
