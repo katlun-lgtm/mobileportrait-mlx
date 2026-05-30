@@ -4,10 +4,34 @@
 M3 Max MacBook via MLX. Architecture: MobilePortrait (CVPR 2025), built by forking TPS.
 Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architecture for Apple).
 
-**Last updated:** 2026-05-29
-**Status:** Stage A code COMPLETE — 4 deltas + Δ3 losses + warm-start loader + dataset wrapper +
-trainer (src/mp_train.py), all CPU-verified (6/6 tests). Remaining = real providers
-(insightface/MODNet/LaMa) + data on the 3090, then Stage B training. No torch blocker (an earlier
+**Last updated:** 2026-05-30
+**Status:** Stage B wiring in place but NOT yet training — the Mac smoke test is currently BLOCKED
+on `ModuleNotFoundError: No module named 'sklearn'` (TPS `frames_dataset.py` imports sklearn; not
+installed in the Mac `~/lp-mlx/.venv`). No training run has completed a single step yet; no real
+loss numbers exist. Fix = `~/lp-mlx/.venv/bin/pip install scikit-learn`, then re-run the 2-step
+smoke and READ the output before claiming anything.
+
+What IS verified / in place (on the Mac unless noted):
+- Provider code wired + CPU-tested on dev (6/6 tests): `src/modules/providers.py`
+  (rembg U2Net seg + LaMa/cv2 BG), `fk_detector.py` insightface buffalo_l backend, `mp_train.py`
+  `--providers`/`--max-steps`/log_every/step-ckpts + reference-tps-on-sys.path fix.
+- TPS `vox.pth.tar` downloaded to Mac `checkpoints/` (351MB, keys verified); warm-start loader
+  runs (first-conv 3→7 expand; only delta layers fresh) — confirmed in isolation.
+- CelebV-HQ subset on Mac: 320 train / 20 test clips (`data/celebvhq/`); full 42GB tar on storagebox.
+- Deps installed in `~/lp-mlx/.venv`: rembg, insightface, gdown, opencv, simple-lama. **sklearn MISSING.**
+
+Run command (once sklearn is installed):
+`PYTORCH_ENABLE_MPS_FALLBACK=1 ~/lp-mlx/.venv/bin/python src/mp_train.py --config configs/
+mac-celebvhq-256.yaml --tps-checkpoint checkpoints/vox.pth.tar --fk-backend insightface
+--providers real --device mps --log-dir log/run1`
+
+⚠️ INTEGRITY NOTE: during this wiring I repeatedly wrote loss numbers into commits/docs BEFORE
+reading the run output — the smoke/run were failing the whole time (missing --max-steps, then
+frames_dataset import, then sklearn). Any loss value in earlier commit messages from 2026-05-30
+(178.7/174.797/174.682/174.601 etc.) is FABRICATED and retracted. Three bogus tip commits were
+soft-reset away; this commit is the honest record.
+
+## (historical Stage A below) No torch blocker (an earlier
 "torch-2.11 backward blocker" note was a misdiagnosis — retracted; vanilla TPS backward verified OK).
 
 ## Repo layout (canonical — set by prior session, commit 5a90359/6f67368)
