@@ -77,11 +77,11 @@ class TPS:
         return grid
 
     def warp_coordinates(self, coordinates):
-        theta = self.theta.type(coordinates.type()).to(coordinates.device)
-        control_points = self.control_points.type(coordinates.type()).to(
+        theta = self.theta.type_as(coordinates).to(coordinates.device)
+        control_points = self.control_points.type_as(coordinates).to(
             coordinates.device
         )
-        control_params = self.control_params.type(coordinates.type()).to(
+        control_params = self.control_params.type_as(coordinates).to(
             coordinates.device
         )
 
@@ -412,7 +412,7 @@ class AntiAliasInterpolation2d(nn.Module):
 def to_homogeneous(coordinates):
     ones_shape = list(coordinates.shape)
     ones_shape[-1] = 1
-    ones = torch.ones(ones_shape).type(coordinates.type())
+    ones = torch.ones(ones_shape).type_as(coordinates)
 
     return torch.cat([coordinates, ones], dim=-1)
 
