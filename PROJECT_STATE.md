@@ -7,15 +7,21 @@ Predecessor: lp-mlx (LivePortrait port; ~6fps, conv-walled — wrong architectur
 
 **Last updated:** 2026-05-30
 
-## Status — a real training STEP now runs on the Mac (stub-provider smoke)
+## Status — training works and LEARNS on the Mac, but is ~55 s/step (too slow as-is)
 
-First genuine run output, READ from `log/stub0` (`--providers stub --fk-backend stub --device mps`,
-workers=0, PYTORCH_ENABLE_MPS_FALLBACK=1): **rc=0, 0 tracebacks, epoch0 step1 loss 232.169**
-(perceptual 227.17 / equivariance 0.58 / warp 4.42); 2 steps in ~18 s incl. startup.
+Measured 32-step stub run, READ from `log/stubtimed` (`--providers stub --fk-backend stub
+--device mps`, workers=0, PYTORCH_ENABLE_MPS_FALLBACK=1): **rc=0, 0 tracebacks, 1779 s / 32 steps
+= ~55 s/step** (process at ~89% CPU = working, not hung).
+- **It learns:** step1 loss 237.161 (percep 232.32) → step20 168.508 (percep 164.06), ~29% drop.
+- **But ~55 s/step ⇒ a 60-epoch / ~4800-step run = DAYS, not hours.** This is with STUB providers,
+  so the cost is NOT data-loading — it's the **core train step on MPS+CPU-fallback** (grid_sample
+  backward and likely other ops fall back to CPU). The earlier 765 ms "bench" mismeasured this
+  (synthetic, fewer real ops on the fallback path). Stub losses have only 3 terms (kp/landmark/mask
+  need real FK + masks).
 
-This is NOT yet a full run. Stub losses have only 3 terms (kp/landmark/mask need real FK + masks).
-No checkpoint written yet. Steady-state step rate and whether it LEARNS over many steps are NOT
-yet measured — do not assume them.
+⇒ The Mac MPS+fallback path is ~70× slower than its own bench and impractical for a full run as
+configured. DECISION NEEDED (see NEXT): rent a CUDA GPU, train pure-CPU on Mac (slow but free),
+shrink the run drastically, or reduce the fallback surface. No full run launched.
 
 ### Four real blockers fixed today (each from an actual traceback, not guessed)
 1. `ModuleNotFoundError: sklearn` (TPS frames_dataset imports it) → `pip install scikit-learn` 1.8.0.
@@ -48,12 +54,21 @@ NOT built yet. The stub fast-pass is to first confirm the model learns at all.
   PYTORCH_ENABLE_MPS_FALLBACK=1 = 765 ms/step on the synthetic bench; Mac CPU = 6554 ms/step.
   (These were STUB-provider synthetic benches; real data-loading cost is separate, see above.)
 
-## NEXT (one careful step at a time, read each result)
-1. Timed stub run → real steady-state s/step (the 18 s/2 steps includes one-time startup).
-2. If sane, let a stub run train a few hundred steps + watch the loss trend (does it actually learn?).
-3. Eval a checkpoint (self-reenactment on a held-out test clip).
-4. Build precompute+cache → real-provider run.
-5. Stage C: MLX port (reuse lp-mlx infra).
+## NEXT — decide how to train given ~55 s/step on Mac MPS+fallback (DONE: steps 1-2 below)
+1. ✅ Timed stub run → ~55 s/step (log/stubtimed, 1779s/32).
+2. ✅ Confirmed it learns (237→168 over 20 steps).
+3. ⛔ Run is days-long as configured. OPTIONS to decide:
+   a. Rent a CUDA GPU (4090 ~$0.3/hr): no fallback, ~50ms/step → full run <1h, ~$5-20. Fastest path
+      to a trained model; the Mac is only the eventual *inference* target (Stage C MLX), not training.
+   b. Pure-CPU on Mac (`--device cpu`): ~6.5s/step bench (~8× faster than MPS+fallback here!) because
+      it avoids the MPS↔CPU copy thrash of the fallback. Worth MEASURING — a CPU timed run might be
+      the free win. ~9h for 4800 steps.
+   c. Shrink the run: fewer epochs / smaller subset for a quick proof-of-quality checkpoint, accept
+      undertraining.
+   d. Reduce fallback surface: only grid_sample-backward falls back; investigate a custom autograd
+      Function so the rest stays on MPS. Real R&D, uncertain.
+4. After a checkpoint exists: eval (self-reenactment on a test clip) → build precompute+cache for
+   real providers → Stage C MLX port.
 
 ## Repo layout (canonical — set by prior session)
 - `reference-tps/` — pristine TPS (yoyo-nb, MIT), untouched baseline for diffing.
