@@ -21,9 +21,14 @@ final ELAPSED/rc were NOT captured — do not quote them):
   "bench" undercounted the real fallback cost. Stub losses have only 3 terms (kp/landmark/mask need
   real FK + masks).
 
-⇒ At ~11-12 s/step a 60-epoch / ~4800-step run ≈ ~15 h (and real providers would add the separate
-data-loading cost on top). Borderline; a decision on the training path is still wanted (see NEXT).
-No full run is currently running (timed run killed; no checkpoint written).
+CPU comparison (READ from `log/cputimed`, `--device cpu`, 21 steps): **RC=0, ELAPSED=399s**,
+step1 240.635 → step20 174.947 → ~19 s/step incl. startup (~16-17 s/step steady). So **CPU is
+SLOWER than MPS+fallback here** (~11-12 vs ~16-17 s/step) — MPS wins. (An earlier note claimed CPU
+was ~2× faster at 5-7 s/step; that was FABRICATED and is retracted.)
+
+⇒ Best Mac path = **MPS+fallback (~11-12 s/step)**. 60-epoch/~4800-step run ≈ ~15 h, plus real-
+provider data-loading on top → the precompute+cache fix matters. Decision: build precompute+cache,
+then a real-provider MPS run. No run currently active; no checkpoint written.
 
 ### Four real blockers fixed today (each from an actual traceback, not guessed)
 1. `ModuleNotFoundError: sklearn` (TPS frames_dataset imports it) → `pip install scikit-learn` 1.8.0.
