@@ -54,6 +54,31 @@ def _batched_inv(L):
     return inv.reshape(tuple(batch) + (m, m))
 
 
+@mx.custom_function
+def _batched_solve(L, Y):
+    """X = inv(L) @ Y over leading batch dims, with a hand-written VJP.
+
+    MLX 0.32 has no vjp for `Inverse`, so a plain `_batched_inv(L) @ Y` cannot be
+    backpropagated. This wraps the solve in a custom_function whose backward uses the
+    analytic gradient of X = L^-1 Y — which only needs FORWARD inverses (those work):
+        dY = (L^-1)^T @ G
+        dL = -(dY @ X^T)
+    Forward output is identical to `_batched_inv(L) @ Y`, so forward parity is preserved.
+    """
+    return _batched_inv(L) @ Y
+
+
+@_batched_solve.vjp
+def _batched_solve_vjp(primals, cotangent, output):
+    L, _Y = primals
+    G = cotangent
+    X = output
+    iLT = mx.swapaxes(_batched_inv(L), -1, -2)  # (L^-1)^T
+    dY = iLT @ G
+    dL = -(dY @ mx.swapaxes(X, -1, -2))
+    return dL, dY
+
+
 class TPS:
     """Thin-plate-spline transform. Faithful port of src/modules/util.py::TPS.
 
@@ -84,10 +109,13 @@ class TPS:
             kp_2 = kwargs["kp_2"]
             self.gs = kp_1.shape[1]
             n = kp_1.shape[2]
-            # K = ||kp_1_i - kp_1_j||  (bs, gs, n, n)
+            # K = ||kp_1_i - kp_1_j||^2  (bs, gs, n, n)
+            # NOTE: torch ref does norm()**2; we compute the squared distance directly.
+            # The old `sqrt(sum(diff^2)); K=K*K` round-trip is identical in the forward but
+            # its sqrt has an INFINITE gradient at the zero diagonal (kp_i - kp_i = 0) ->
+            # NaN in backward. sum(diff^2) gives the same value with a finite gradient.
             diff = kp_1[:, :, :, None, :] - kp_1[:, :, None, :, :]
-            K = mx.sqrt(mx.sum(diff * diff, axis=4))
-            K = K * K
+            K = mx.sum(diff * diff, axis=4)
             K = K * mx.log(K + 1e-9)
 
             one1 = mx.ones((bs, kp_1.shape[1], kp_1.shape[2], 1), dtype=kp_1.dtype)
@@ -106,7 +134,9 @@ class TPS:
             eye = mx.eye(m).reshape((1, 1, m, m)) * 0.01
             L = L + eye
 
-            param = _batched_inv(L) @ Y  # (bs,gs,n+3,2)
+            param = _batched_solve(
+                L, Y
+            )  # (bs,gs,n+3,2); custom-vjp solve (inv has no vjp)
             self.theta = mx.transpose(param[:, :, n:, :], (0, 1, 3, 2))  # (bs,gs,2,3)
             self.control_points = kp_1
             self.control_params = param[:, :, :n, :]  # (bs,gs,n,2)
