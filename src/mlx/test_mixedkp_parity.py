@@ -38,6 +38,9 @@ torch.manual_seed(0)
 np.random.seed(0)
 
 tmodel = TorchMKD(num_tps=NUM_TPS, fk_backend="stub").eval()
+# MixedKP zero-inits its residual head; randomise it so parity exercises a real delta
+torch.nn.init.normal_(tmodel.mixed.mlp[-1].weight, std=0.1)
+torch.nn.init.normal_(tmodel.mixed.mlp[-1].bias, std=0.1)
 mmodel = MlxMKD(num_tps=NUM_TPS, fk_backend="stub")
 load_mixedkp_from_torch(mmodel, tmodel.state_dict())
 
