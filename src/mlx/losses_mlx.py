@@ -47,3 +47,19 @@ def equivariance_loss(
 
     warped = transform.warp_coordinates(transformed_kp)  # (bs, K, 2)
     return mx.mean(mx.abs(kp_driving["fg_kp"] - warped))
+
+
+def warp_loss(inpainting_network, driving, generated):
+    """model.py 208-217. Compare the decoder's warped encoder maps to a fresh encode of
+    the DRIVING image, occluded the same way:
+        L = sum_i |get_encode(driving)[i] - generated['warped_encoder_maps'][-i-1]|.mean()
+    `generated` is the inpainting forward output (must include 'occlusion_map' +
+    'warped_encoder_maps'). driving: NHWC. Returns scalar mx.array.
+    """
+    occlusion_map = generated["occlusion_map"]
+    encode_map = inpainting_network.get_encode(driving, occlusion_map)
+    decode_map = generated["warped_encoder_maps"]
+    value = mx.array(0.0)
+    for i in range(len(encode_map)):
+        value = value + mx.mean(mx.abs(encode_map[i] - decode_map[-i - 1]))
+    return value

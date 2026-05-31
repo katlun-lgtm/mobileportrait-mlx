@@ -130,8 +130,13 @@ class InpaintingNetwork(nn.Module):
         out_dict["occlusion_map"] = occlusion_map
         deformation = dense_motion["deformation"]
 
+        # train-only warped-encoder branch (mx.stop_gradient mirrors torch .detach());
+        # collected for the warp_loss. Mirrors reference forward exactly.
+        out_ij = self.deform_input(mx.stop_gradient(out), deformation)
         out = self.deform_input(out, deformation)
+        out_ij = self.occlude_input(out_ij, mx.stop_gradient(occlusion_map[0]))
         out = self.occlude_input(out, occlusion_map[0])
+        warped_encoder_maps = [out_ij]
 
         for i in range(self.num_down_blocks):
             out = self.resblock[2 * i](out)
@@ -139,9 +144,14 @@ class InpaintingNetwork(nn.Module):
             out = self.up_blocks[i](out)
 
             encode_i = encoder_map[-(i + 2)]
+            encode_ij = self.deform_input(mx.stop_gradient(encode_i), deformation)
             encode_i = self.deform_input(encode_i, deformation)
             occ_ind = (i + 1) if self.multi_mask else 0
+            encode_ij = self.occlude_input(
+                encode_ij, mx.stop_gradient(occlusion_map[occ_ind])
+            )
             encode_i = self.occlude_input(encode_i, occlusion_map[occ_ind])
+            warped_encoder_maps.append(encode_ij)
 
             if i == self.num_down_blocks - 1:
                 break
@@ -149,6 +159,7 @@ class InpaintingNetwork(nn.Module):
 
         deformed_source = self.deform_input(source_image, deformation)
         out_dict["deformed"] = deformed_source
+        out_dict["warped_encoder_maps"] = warped_encoder_maps
 
         occlusion_last = occlusion_map[-1]
         out = out * (1 - occlusion_last) + encode_i
@@ -157,6 +168,24 @@ class InpaintingNetwork(nn.Module):
         out = out * (1 - occlusion_last) + deformed_source * occlusion_last
         out_dict["prediction"] = out
         return out_dict
+
+    def get_encode(self, driver_image, occlusion_map):
+        """Encode the driving image + occlude each level — the warp_loss target side.
+        Mirrors reference get_encode (occlusion indices [-1] then [2-i]); stop_gradient
+        everywhere (torch .detach()). num_down_blocks assumed 3 (so 2-i in {2,1,0})."""
+        out = self.first(self._augment(driver_image))
+        encoder_map = [
+            self.occlude_input(
+                mx.stop_gradient(out), mx.stop_gradient(occlusion_map[-1])
+            )
+        ]
+        for i in range(len(self.down_blocks)):
+            out = self.down_blocks[i](mx.stop_gradient(out))
+            out_mask = self.occlude_input(
+                mx.stop_gradient(out), mx.stop_gradient(occlusion_map[2 - i])
+            )
+            encoder_map.append(mx.stop_gradient(out_mask))
+        return encoder_map
 
 
 def load_inpaint_from_torch(mlx_mod, torch_sd):
