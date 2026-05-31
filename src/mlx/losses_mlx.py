@@ -63,3 +63,18 @@ def warp_loss(inpainting_network, driving, generated):
     for i in range(len(encode_map)):
         value = value + mx.mean(mx.abs(encode_map[i] - decode_map[-i - 1]))
     return value
+
+
+def kp_distance_loss(kp_driving):
+    """MobilePortrait Δ3 kp_distance (model.py 235-241).
+
+    Pulls the fused mixed keypoints (fg_kp) toward the frozen 106-pt FK landmarks
+    (fk_kp) so the learned keypoints stay anchored to real facial structure. Compares
+    the first n = min(num_fk, num_mixed) points (the two sets differ in count). Requires
+    the kp extractor to be a MixedKPDetector (it produces fk_kp); returns the raw mean
+    so the caller applies the loss weight, matching equivariance_loss / warp_loss.
+    """
+    fk = kp_driving["fk_kp"]
+    mk = kp_driving["fg_kp"]
+    n = min(fk.shape[1], mk.shape[1])
+    return mx.mean(mx.abs(mk[:, :n] - fk[:, :n]))
