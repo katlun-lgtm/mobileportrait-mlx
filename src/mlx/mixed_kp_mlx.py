@@ -30,26 +30,37 @@ from keypoint_detector_mlx import KPDetector
 
 
 class MixedKP(nn.Module):
-    """Fuse FK (106) + NK (num_nk) keypoints -> num_mixed keypoints in [-1,1].
+    """Fuse FK (106) + NK (num_nk) keypoints -> num_mixed keypoints (residual).
 
-    concat(fk 106*2, nk num_nk*2) -> Linear/ReLU stack -> num_mixed*2 -> tanh -> (.,.,2).
+    concat(fk 106*2, nk num_nk*2) -> Linear/ReLU stack -> num_mixed*2 = delta, and
+    mixed = nk + delta. With the final layer zero-initialised, delta=0 at init so
+    mixed == nk (identity passthrough of the warm-started neural keypoints) -- this keeps
+    the warm-started DenseMotion/Inpainting intact instead of scrambling it.
     Torch stores the MLP as nn.Sequential(Linear, ReLU, Linear, ReLU, Linear); here the
     three Linears live in self.mlp (a list) and ReLU is applied functionally between them.
     """
 
-    def __init__(self, num_fk=106, num_nk=50, num_mixed=50, hidden=(256, 256)):
+    def __init__(
+        self, num_fk=106, num_nk=50, num_mixed=50, hidden=(256, 256), residual=True
+    ):
         super().__init__()
         din = num_fk * 2 + num_nk * 2
         layers, d = [], din
         for h in hidden:
             layers.append(nn.Linear(d, h))
             d = h
-        layers.append(nn.Linear(d, num_mixed * 2))
+        final = nn.Linear(d, num_mixed * 2)
+        layers.append(final)
         self.mlp = layers  # 3 Linears; ReLU applied between (see __call__)
         self.num_mixed = num_mixed
+        self.residual = residual
+        if residual:
+            # delta=0 at init -> mixed == nk (identity passthrough; keeps warm-start)
+            final.weight = mx.zeros_like(final.weight)
+            final.bias = mx.zeros_like(final.bias)
 
     def __call__(self, fk, nk):
-        """fk (bs,106,2), nk (bs,num_nk,2) -> (bs,num_mixed,2) in [-1,1]."""
+        """fk (bs,106,2), nk (bs,num_mixed,2) -> (bs,num_mixed,2)."""
         bs = fk.shape[0]
         x = mx.concatenate([fk.reshape(bs, -1), nk.reshape(bs, -1)], axis=1)
         n = len(self.mlp)
@@ -57,7 +68,10 @@ class MixedKP(nn.Module):
             x = lin(x)
             if i < n - 1:
                 x = nn.relu(x)
-        return mx.tanh(x).reshape(bs, self.num_mixed, 2)
+        delta = x.reshape(bs, self.num_mixed, 2)
+        if self.residual:
+            return nk + delta
+        return mx.tanh(delta)
 
 
 class FKDetector(nn.Module):

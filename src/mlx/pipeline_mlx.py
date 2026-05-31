@@ -27,6 +27,15 @@ class MobilePortraitPipeline(nn.Module):
         # source, driving: NHWC
         kp_source = self.kp_extractor(source)
         kp_driving = self.kp_extractor(driving)
+        return self.forward_with_kp(source, kp_source, kp_driving)
+
+    def forward_with_kp(self, source, kp_source, kp_driving):
+        """Forward from precomputed keypoint dicts (skips the kp extractor).
+
+        Lets training inject mixed keypoints whose frozen-FK part was computed eagerly
+        outside the differentiable graph (the FK detector is a non-traceable onnxruntime
+        roundtrip). kp_source/kp_driving must each carry 'fg_kp'. Everything else matches
+        __call__."""
         dense_motion = self.dense_motion_network(
             source, kp_driving=kp_driving, kp_source=kp_source, bg_param=None
         )
