@@ -48,9 +48,9 @@ class BasicBlock(nn.Module):
 class ResNet18(nn.Module):
     """torchvision resnet18 (NHWC), fc -> num_classes."""
 
-    def __init__(self, num_classes):
+    def __init__(self, num_classes, in_channels=3):
         super().__init__()
-        self.conv1 = nn.Conv2d(3, 64, 7, stride=2, padding=3, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, 64, 7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm(64)
         self.maxpool = nn.MaxPool2d(kernel_size=3, stride=2, padding=1)
         self.layer1 = self._stage(64, 64, 2, stride=1)
