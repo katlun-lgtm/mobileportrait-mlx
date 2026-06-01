@@ -94,6 +94,13 @@ def main():
     )
     ap.add_argument("--log-every", type=int, default=50)
     ap.add_argument(
+        "--workers",
+        type=int,
+        default=-1,
+        help="DataLoader num_workers. -1 = auto: 0 with insightface FK (its ONNX app is "
+        "NOT fork/pickle-safe, so num_workers>0 crashes/hangs), else the config value.",
+    )
+    ap.add_argument(
         "--test-dir",
         default=None,
         help="dir of held-out PNG frames for eval; default = config root_dir/test/<first clip>",
@@ -152,11 +159,18 @@ def main():
     model = GeneratorFullModel(kp, bg, dense, inp, tp)
     if args.device != "cpu":
         model = model.to(args.device)
+    if args.workers >= 0:
+        nworkers = args.workers
+    elif args.fk_backend == "insightface":
+        nworkers = 0  # insightface ONNX app isn't fork/pickle-safe across workers
+    else:
+        nworkers = tp.get("dataloader_workers", 4)
+    print(f"DataLoader num_workers={nworkers} (fk={args.fk_backend})", flush=True)
     loader = DataLoader(
         dataset,
         batch_size=bs,
         shuffle=True,
-        num_workers=tp.get("dataloader_workers", 4),
+        num_workers=nworkers,
         drop_last=True,
     )
     os.makedirs(args.log_dir, exist_ok=True)

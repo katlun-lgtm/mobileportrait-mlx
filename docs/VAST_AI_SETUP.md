@@ -25,6 +25,13 @@ The repo is dev-local (no git remote). From the **dev server** push the needed d
 
 ```bash
 # on dev (204.168.159.197), replace HOST:PORT with the vast.ai ssh target
+# one-shot from dev:
+./scripts/push_to_vast.sh <HOST> <PORT>
+# (wraps the rsync below; excludes .git/data/renders/checkpoints/venv/log)
+```
+
+Equivalent manual rsync:
+```bash
 rsync -avz -e "ssh -p <PORT>" \
   --exclude '.git' --exclude 'data' --exclude 'renders' --exclude '*.pth.tar' \
   /root/mobileportrait-mlx/src \
@@ -79,8 +86,15 @@ python src/mp_train_eval.py \
 ```
 Read the printed `samples/s` and `s/step`. Compute the long-run cost:
 `hours = max_steps * s/step / 3600`, `cost = hours * $/hr`.
-**Re-decide max_steps from the REAL number** before launching the long run. If s/step is
-way off the 1.5–2.5 estimate (slow disk / dataloader bound), fix workers/data staging first.
+**Re-decide max_steps from the REAL number** before launching the long run.
+
+⚠️ **DataLoader workers + insightface:** the wrapper auto-sets `num_workers=0` when
+`--fk-backend insightface` (the ONNX FaceAnalysis app is NOT fork/pickle-safe, so
+`num_workers>0` crashes or hangs on the first batch). It prints `DataLoader num_workers=N`
+at start — confirm it's 0. If dataloading bottlenecks s/step (GPU < ~80% busy), the fix is
+NOT more workers (they'll crash) — instead pre-extract frames to PNG dirs and/or stage the
+dataset on a RAM disk so single-process loading keeps up. `--workers N` forces a value if
+you know your setup is safe (e.g. stub FK).
 
 ## 6. The experiment (~30–50k steps; size it from step 5)
 ```bash
