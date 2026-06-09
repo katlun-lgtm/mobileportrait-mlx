@@ -1,4 +1,5 @@
 reference-tps/.git/
+reference-tps/assets/
 __pycache__/
 *.pth
 *.tar
