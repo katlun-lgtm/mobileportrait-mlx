@@ -6,3 +6,6 @@ __pycache__/
 checkpoints/
 data/
 .venv/
+venv/
+*.safetensors
+*.pt2
