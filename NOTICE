@@ -1,0 +1,35 @@
+mobileportrait-mlx
+==================
+
+An independent MLX reimplementation of MobilePortrait (CVPR 2025), built by
+forking and modifying the Thin-Plate-Spline-Motion-Model. This project's own
+code is licensed under the MIT License (see LICENSE).
+
+It incorporates and builds on the following third-party work; their licenses
+and copyrights are retained and apply to their respective portions:
+
+- Thin-Plate-Spline-Motion-Model (the fork base, vendored under reference-tps/)
+  https://github.com/yoyo-nb/Thin-Plate-Spline-Motion-Model
+  MIT License, Copyright (c) 2021 yoyo-nb. Full text: reference-tps/LICENSE
+
+- First Order Motion Model (FOMM), which TPS itself derives from
+  https://github.com/AliaksandrSiarohin/first-order-model
+  MIT License, Copyright (c) 2019 Aliaksandr Siarohin
+
+- MobilePortrait (architecture reference only; no code or weights used)
+  "MobilePortrait: Real-Time One-Shot Neural Head Avatars on Mobile Devices",
+  Jiang et al., CVPR 2025, arXiv:2407.05712. The architecture is ByteDance's;
+  its code and weights are unreleased. This repository is a clean reimplementation
+  from the paper, not a copy of any ByteDance source.
+
+Runtime dependencies (not redistributed here, fetched on demand):
+
+- VGG19 perceptual-loss weights via torchvision (BSD-3-Clause).
+- InsightFace "buffalo_l" facial-keypoint detector, used as the optional FK
+  backend, is downloaded at runtime. InsightFace pretrained models are released
+  for NON-COMMERCIAL / research use only — see https://github.com/deepinsight/insightface
+  for their terms before any commercial use.
+
+Trained checkpoints are NOT distributed in this repository. Any weights produced
+by warm-starting from TPS (VoxCeleb) or training on VoxCeleb / CelebV-HQ inherit
+those datasets' research / non-commercial terms.
