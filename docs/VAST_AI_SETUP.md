@@ -61,7 +61,7 @@ release. Put it at `checkpoints/vox.pth.tar`.
 
 ```bash
 mkdir -p checkpoints
-# scp from Mac: scp katlun@173.32.242.72:~/mobileportrait-mlx/checkpoints/vox.pth.tar checkpoints/
+# scp from your Mac/dev: scp <user>@<host>:~/mobileportrait-mlx/checkpoints/vox.pth.tar checkpoints/
 ```
 
 ## 4. Dataset
