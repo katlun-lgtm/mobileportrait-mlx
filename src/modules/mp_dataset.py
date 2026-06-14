@@ -72,6 +72,7 @@ class MobilePortraitDataset(torch.utils.data.Dataset):
         bg_provider=None,
         emit_pseudo_bg=True,
         emit_driving_masks=True,
+        fk_cache_dir=None,
     ):
         self.base = base
         self.fk_detector = fk_detector
@@ -79,6 +80,7 @@ class MobilePortraitDataset(torch.utils.data.Dataset):
         self.bg = bg_provider or stub_pseudo_bg
         self.emit_pseudo_bg = emit_pseudo_bg
         self.emit_driving_masks = emit_driving_masks
+        self.fk_cache_dir = fk_cache_dir  # e.g. "/path/celebvhq_fk"
 
     def __len__(self):
         return len(self.base)
@@ -92,6 +94,22 @@ class MobilePortraitDataset(torch.utils.data.Dataset):
             fk = self.fk_detector(t)  # (1,N,2)
         return fk[0]
 
+    def _load_fk_cache(self, frame_path):
+        """Load pre-extracted FK kp from disk: (106,2) float32 -> (106,2) tensor."""
+        import os
+        import numpy as np
+
+        stem = os.path.splitext(os.path.basename(frame_path))[0]
+        # path: fk_cache_dir/{split}/{clip}/{stem}.npy
+        # frame_path: celebvhq_frames/{split}/{clip}/{stem}.png
+        parts = frame_path.replace("\\", "/").split("/")
+        clip = parts[-2]
+        split = parts[-3]
+        npy = os.path.join(self.fk_cache_dir, split, clip, stem + ".npy")
+        if os.path.exists(npy):
+            return torch.from_numpy(np.load(npy))
+        return None
+
     def __getitem__(self, idx):
         out = self.base[idx]
         if "driving" not in out:  # not a train-mode sample; pass through
@@ -99,6 +117,15 @@ class MobilePortraitDataset(torch.utils.data.Dataset):
         source = out["source"]  # (3,H,W) float32
         driving = out["driving"]
         _, h, w = driving.shape
+
+        # Attach pre-cached FK keypoints so GeneratorFullModel can skip insightface inference
+        if self.fk_cache_dir and "source_path" in out and "driving_path" in out:
+            fk_s = self._load_fk_cache(out["source_path"])
+            fk_d = self._load_fk_cache(out["driving_path"])
+            if fk_s is not None:
+                out["fk_source"] = fk_s
+            if fk_d is not None:
+                out["fk_driving"] = fk_d
 
         if self.emit_driving_masks:
             out["fg_mask"] = self.seg(driving)  # (1,H,W)

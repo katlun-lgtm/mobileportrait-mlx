@@ -132,8 +132,9 @@ class GeneratorFullModel(torch.nn.Module):
                 self.vgg = self.vgg.cuda()
 
     def forward(self, x, epoch):
-        kp_source = self.kp_extractor(x["source"])
-        kp_driving = self.kp_extractor(x["driving"])
+        # Use pre-cached FK keypoints from the batch when available (avoids CPU insightface)
+        kp_source = self.kp_extractor(x["source"], fk_kp=x.get("fk_source"))
+        kp_driving = self.kp_extractor(x["driving"], fk_kp=x.get("fk_driving"))
         bg_param = None
         if self.bg_predictor:
             if epoch >= self.bg_start:
