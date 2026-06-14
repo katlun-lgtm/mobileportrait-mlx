@@ -47,8 +47,11 @@ class MixedKPDetector(nn.Module):
         self.fk = FKDetector(backend=fk_backend, num_fk=num_fk)
         self.mixed = MixedKP(num_fk=num_fk, num_nk=num_tps * 5, num_mixed=num_tps * 5)
 
-    def forward(self, image):
+    def forward(self, image, fk_kp=None):
         nk_kp = self.nk(image)["fg_kp"]  # (bs, num_tps*5, 2)  learned
-        fk_kp = self.fk(image)  # (bs, num_fk, 2)     frozen
+        if fk_kp is None:
+            fk_kp = self.fk(image)  # (bs, num_fk, 2)  frozen; skipped when pre-cached
+        else:
+            fk_kp = fk_kp.to(image.device)  # cache tensors arrive as CPU
         mixed_kp = self.mixed(fk_kp, nk_kp)  # (bs, num_tps*5, 2)
         return {"fg_kp": mixed_kp, "nk_kp": nk_kp, "fk_kp": fk_kp}

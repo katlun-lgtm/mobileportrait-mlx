@@ -97,11 +97,14 @@ def make_dataset(config, fk_detector=None, seg_provider=None, bg_provider=None):
         _fd.mimread = _mimread_nomemtest
 
     base = FramesDataset(is_train=True, **config["dataset_params"])
+
+    fk_cache_dir = config.get("fk_cache_dir")
     base = MobilePortraitDataset(
         base,
         fk_detector=fk_detector,
         seg_provider=seg_provider,
         bg_provider=bg_provider,
+        fk_cache_dir=fk_cache_dir,
     )
     reps = config["train_params"].get("num_repeats", 1)
     return DatasetRepeater(base, reps) if reps and reps != 1 else base
