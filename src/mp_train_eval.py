@@ -83,6 +83,12 @@ def main():
     ap.add_argument("--config", default="reference-tps/config/vox-256.yaml")
     ap.add_argument("--tps-checkpoint", default=None)
     ap.add_argument(
+        "--mp-checkpoint",
+        default=None,
+        help="Resume from a MobilePortrait checkpoint (kp_detector/dense_motion_network/"
+        "inpainting_network keys). Applied AFTER --tps-checkpoint if both given.",
+    )
+    ap.add_argument(
         "--fk-backend", default="insightface", choices=["stub", "insightface"]
     )
     ap.add_argument("--providers", default="stub", choices=["stub", "real"])
@@ -123,6 +129,16 @@ def main():
             inpainting_network=inp,
             num_channels=config["model_params"]["common_params"]["num_channels"],
             map_location=args.device,
+        )
+    if args.mp_checkpoint:
+        ckpt = torch.load(args.mp_checkpoint, map_location=args.device)
+        kp.load_state_dict(ckpt["kp_detector"])
+        dense.load_state_dict(ckpt["dense_motion_network"])
+        inp.load_state_dict(ckpt["inpainting_network"])
+        print(
+            f"[mp-checkpoint] loaded from {args.mp_checkpoint} "
+            f"(step={ckpt.get('step', '?')})",
+            flush=True,
         )
 
     fk = FKDetector(backend=args.fk_backend)
