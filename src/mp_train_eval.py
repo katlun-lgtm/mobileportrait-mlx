@@ -131,8 +131,10 @@ def main():
         from modules.providers import build_providers
 
         seg_provider, bg_provider = build_providers("real")
+    # fk_detector=None: lmk_mask loss weight is 0 in all configs so per-batch insightface
+    # inference for landmark mask is pure overhead (~8s/step on CPU). Skip it.
     dataset = make_dataset(
-        config, fk_detector=fk, seg_provider=seg_provider, bg_provider=bg_provider
+        config, fk_detector=None, seg_provider=seg_provider, bg_provider=bg_provider
     )
 
     # held-out eval frames
