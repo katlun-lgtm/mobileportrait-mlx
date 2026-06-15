@@ -38,20 +38,28 @@ def extract_clip_frames(mp4_bytes: bytes, out_dir: Path, clip_name: str) -> int:
     clip_dir = out_dir / clip_name
     clip_dir.mkdir(parents=True, exist_ok=True)
 
-    # ffmpeg: scale shortest side to 256, center-pad to 256x256, output %04d.png
-    cmd = [
-        "ffmpeg",
-        "-loglevel",
-        "error",
-        "-i",
-        "pipe:0",
-        "-vf",
-        "scale=256:256:force_original_aspect_ratio=increase,crop=256:256",
-        "-q:v",
-        "2",  # PNG quality (lower = better; irrelevant for lossless)
-        str(clip_dir / "%04d.png"),
-    ]
-    proc = subprocess.run(cmd, input=mp4_bytes, capture_output=True)
+    # Write to temp file: mp4 with moov-at-end can't be piped (ffmpeg can't seek back)
+    with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+        tmp.write(mp4_bytes)
+        tmp_path = tmp.name
+
+    try:
+        cmd = [
+            "ffmpeg",
+            "-loglevel",
+            "error",
+            "-i",
+            tmp_path,
+            "-vf",
+            "scale=256:256:force_original_aspect_ratio=increase,crop=256:256",
+            "-q:v",
+            "2",
+            str(clip_dir / "%04d.png"),
+        ]
+        proc = subprocess.run(cmd, capture_output=True)
+    finally:
+        os.unlink(tmp_path)
+
     if proc.returncode != 0:
         print(
             f"  WARN ffmpeg failed for {clip_name}: {proc.stderr[:200]}",
