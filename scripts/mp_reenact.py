@@ -26,7 +26,7 @@ import numpy as np
 
 HOME = os.path.expanduser("~/mobileportrait-mlx")
 sys.path.insert(0, os.path.join(HOME, "src/mlx"))
-CKPT = os.path.join(HOME, "checkpoints/real_best.safetensors")
+DEFAULT_CKPT = os.path.join(HOME, "checkpoints/real_best.safetensors")
 
 
 def main():
@@ -47,6 +47,7 @@ def main():
         default=os.path.join(HOME, "renders/reenact"),
         help="output path prefix",
     )
+    ap.add_argument("--ckpt", default=DEFAULT_CKPT, help="safetensors checkpoint path")
     ap.add_argument("--max-frames", type=int, default=60)
     ap.add_argument(
         "--margin", type=float, default=0.8, help="crop margin around the face bbox"
@@ -62,7 +63,11 @@ def main():
     from inpainting_network_mlx import InpaintingNetwork
     from pipeline_mlx import MobilePortraitPipeline
 
-    print(f"mlx {mx.__version__}  ckpt_exists={os.path.exists(CKPT)}", flush=True)
+    CKPT = args.ckpt
+    print(
+        f"mlx {mx.__version__}  ckpt={os.path.basename(CKPT)}  exists={os.path.exists(CKPT)}",
+        flush=True,
+    )
 
     # ---- build + load trained weights ----
     kp = MixedKPDetector(num_tps=10, fk_backend="stub")
