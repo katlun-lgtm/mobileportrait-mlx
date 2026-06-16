@@ -13,6 +13,10 @@ ported to **MLX** for GPU training and inference on the M3 Max.
 | Best held-out render L1 | **0.0566** (3,000-clip CelebV-HQ run on RTX 3090) |
 | Core AI / ANE path | 🔬 investigated — full model converts; ANE slower than GPU (see below) |
 
+![Self-reenactment demo — source · driving · prediction](renders/demo.gif)
+
+*Self-reenactment: source frame (left), driving frames (centre), MLX prediction (right). Checkpoint trained on 3,000 CelebV-HQ clips.*
+
 ## Why this exists
 
 The predecessor `lp-mlx` (LivePortrait → MLX) hit a hard ~6 fps ceiling: LivePortrait's SPADE
