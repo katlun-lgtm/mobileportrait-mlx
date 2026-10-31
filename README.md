@@ -15,7 +15,10 @@ ported to **MLX** for GPU training and inference on the M3 Max.
 
 ![Self-reenactment demo — source · driving · prediction](renders/demo.gif)
 
-*Self-reenactment: source frame (left), driving frames (centre), MLX prediction (right). Checkpoint trained on 3,000 CelebV-HQ clips.*
+*Self-reenactment: source frame (left), driving frames (centre), MLX prediction (right). Checkpoint trained on 3,000 CelebV-HQ clips.
+Clip: 4 s from ["Voices from Wikimania – Wikimedian Valentin"](https://commons.wikimedia.org/wiki/File:Voices_from_Wikimania_%E2%80%93_Wikimedian_Valentin.webm)
+by Hauke Kleinschmidt for Wikimedia Deutschland e.V., [CC BY-SA 4.0](https://creativecommons.org/licenses/by-sa/4.0/);
+cropped to the face, resampled to 10 fps and re-rendered by the model. The GIF is licensed under CC BY-SA 4.0.*
 
 ## Why this exists
 
