@@ -8,11 +8,6 @@ Source code of the CVPR'2022 paper "Thin-Plate Spline Motion Model for Image Ani
 
 [**Paper**](https://arxiv.org/abs/2203.14367) **|** [**Supp**](https://cloud.tsinghua.edu.cn/f/f7b8573bb5b04583949f/?dl=1)
 
-### Example animation
-
-![vox](assets/vox.gif)
-![ted](assets/ted.gif)
-
 **PS**: The paper trains the model for 100 epochs for a fair comparison. You can use more data and train for more epochs to get better performance.
 
 
